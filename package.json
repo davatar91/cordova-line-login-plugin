@@ -1,7 +1,7 @@
 {
     "name": "cordova-line-login-plugin",
-    "version": "1.2.11",
-    "description": "",
+    "version": "2.0.0",
+    "description": "Cordova plugin for LINE Login on Android and iOS.",
     "cordova": {
         "id": "cordova-line-login-plugin",
         "platforms": [
@@ -11,6 +11,9 @@
     },
     "repository": {
         "type": "git",
-        "url": "https://github.com/nrikiji/cordova-line-login-plugin"
+        "url": "https://github.com/davatar91/cordova-line-login-plugin"
+    },
+    "engines": {
+        "cordova": ">=10.0.0"
     }
 }

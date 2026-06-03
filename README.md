@@ -1,184 +1,167 @@
 # cordova-line-login-plugin
-A cordova plugin for easy implementation of LINE login using LineSDK.　　
 
-The function login, logs out, acquires, verifies, and refreshes the access token. The version of LineSDK you are using is as follows.  
+A Cordova plugin for LINE Login using the official LINE SDKs.
 
-iOS：5.5.1  
-Android：5.3.1  
+## SDK Versions
 
-cordova >= 7.1.0  
-cordova-ios >= 4.5.0  
-cordova-android >= 8.0.0  
+- iOS: LineSDKSwift 5.16.1
+- Android: LINE SDK for Android 5.12.0
 
-The flow until incorporation is as follows  
-Create a business account corresponding to LINE login from "LINE BUSINESS CENTER". Select NATIVE_APP for Application Type.
+## Supported Cordova Targets
 
-### ios
-1. "IOS Bundle ID" "iOS Scheme" is set from "LINE DEVELOPERS".
-1. When using swift5, specify version in config.xml. (Default is swift4)
-1. Install this plugin
-1. Implementing the program
+This plugin is updated for modern Cordova projects, including:
 
-```
-example)When using swift5
-config.xml  
-<platform name="ios">
-  <preference name="UseSwiftLanguageVersion" value="5" />
-</platform>
-```
+- cordova-android 14.x and 15.x
+- cordova-ios 7.x and 8.x
 
-### android
-1. "Android Package Name" "Android Package Signature" "Android Scheme" is set from "LINE DEVELOPERS"
-1. Install this plugin
-1. Implementing the program
+Minimum plugin engines:
 
-```
-example)  
-Android Package Name : com.example.sample
-Android Package Signature : 11:22:33:44:55:66:77:88:99:aa:bb:cc:dd:ee:ff:gg:hh:ii:jj:kk
-Android Scheme : com.example.sample://
-```
+- cordova >= 10.0.0
+- cordova-android >= 10.0.0
+- cordova-ios >= 6.0.0
 
-## Requirement
-https://github.com/akofman/cordova-plugin-add-swift-support  
+## Platform Requirements
+
+### Android
+
+- Android minSdkVersion >= 24. This is required by LINE SDK for Android 5.12.0.
+- AndroidX is required.
+- The plugin adds `android.useAndroidX=true` and `android.enableJetifier=true` to `platforms/android/gradle.properties` during `after_prepare` when they are missing.
+- Do not set the Cordova activity launch mode to `singleInstance`; LINE SDK needs `onActivityResult`.
+
+Configure your LINE Login channel in LINE Developers Console:
+
+- Android package name
+- Android package signature
+- Android URL scheme, when used by your app
+
+### iOS
+
+- iOS deployment target >= 13.0. This is required by the current LINE SDK for iOS Swift.
+- Swift language version 5 is required. The plugin adds `UseSwiftLanguageVersion=5` to the generated iOS platform config.
+
+Configure your LINE Login channel in LINE Developers Console:
+
+- iOS bundle ID
+- iOS scheme
+
+The plugin adds:
+
+- `line3rdp.$(PRODUCT_BUNDLE_IDENTIFIER)` to `CFBundleURLTypes`
+- `lineauth2` to `LSApplicationQueriesSchemes`
+- `LineSDKSwift/ObjC` through CocoaPods
 
 ## Installation
+
+```sh
 cordova plugin add cordova-line-login-plugin
+```
 
-## Supported Platforms
-- iOS
-- Android
+For a local fork:
 
-## LINE SDK
-This plugin use the SDKs provided by LINE. More information about these in their documentation for [iOS](https://developers.line.me/ja/docs/ios-sdk/) or [Android](https://developers.line.me/ja/docs/android-sdk/)
+```sh
+cordova plugin add /path/to/cordova-line-login-plugin
+```
 
 ## Usage
-
-### Example
 
 ```js
 document.addEventListener('deviceready', onDeviceReady, false);
 
 function onDeviceReady() {
-  lineLogin.initialize({channel_id: "1565553788"});
+  lineLogin.initialize(
+    { channel_id: '1565553788' },
+    function () {
+      console.log('LINE SDK initialized');
+    },
+    function (error) {
+      console.log(error);
+    }
+  );
 }
 
-function onLineLogin() {
-  // login...
+function loginWithLine() {
   lineLogin.login(
-   function(result) {
-     console.log(result); // {userID:12345, displayName:'user name', pictureURL:'thumbnail url'}
-   }, function(error) {
-     console.log(error);
-   });
-}
-
-function onLineLoginWeb {
-  // login with web...(iOS only)
-  lineLogin.loginWeb(
-    function(result) {
-      console.log(result); // {userID:12345, displayName:'user name', pictureURL:'thumbnail url'}
-    }, function(error) {
-      console.log(error);
-    });
-}
-
-function onLineLogout {
-  // logout...
-  lineLogin.logout(
-    function(result) {
+    function (result) {
       console.log(result);
-    }, function(error) {
+      // { userID, displayName, pictureURL?, email? }
+    },
+    function (error) {
       console.log(error);
-    });
+    }
+  );
 }
 
-function onLineGetAccessToken() {
-  // get access token
+function loginWithLineWeb() {
+  lineLogin.loginWeb(
+    function (result) {
+      console.log(result);
+    },
+    function (error) {
+      console.log(error);
+    }
+  );
+}
+
+function logoutLine() {
+  lineLogin.logout(
+    function () {
+      console.log('Logged out');
+    },
+    function (error) {
+      console.log(error);
+    }
+  );
+}
+
+function getLineAccessToken() {
   lineLogin.getAccessToken(
-    function(result) {
-      // success
-      console.log(result); // {accessToken:'xxxxxxxx', expireTime: 123456789}
-    }, function(error) {
-      // failed
-    });
+    function (result) {
+      console.log(result);
+      // { accessToken, expireTime }
+    },
+    function (error) {
+      console.log(error);
+    }
+  );
 }
 
-function onLineVerifyAccessToken() {
-  // verify current access token
+function verifyLineAccessToken() {
   lineLogin.verifyAccessToken(
-    function() {
-      // success
-    }, function(error) {
-      // failed
-    });
+    function () {
+      console.log('Access token is valid');
+    },
+    function (error) {
+      console.log(error);
+    }
+  );
 }
 
-function onLineRefreshAccessToken() {
-  // refresh access token
-  lineLogin.verifyAccessToken(
-    function(accessToken) {
-      // success
-    }, function(error) {
-      // failed
-    });
+function refreshLineAccessToken() {
+  lineLogin.refreshAccessToken(
+    function (accessTokenOrResult) {
+      console.log(accessTokenOrResult);
+    },
+    function (error) {
+      console.log(error);
+    }
+  );
 }
 ```
 
-If you want to use it with ionic, please refer to the [ionic-native documentation](https://ionicframework.com/docs/native/line-login).
+## Error Format
 
-### Error Code
-error callback returns an error of the form 　
-```
+Error callbacks return an object:
+
+```js
 {
-  code: -1: Invalid parameter, -2:SDK returned an error, -3: Unknown error
-  sdkErrorCode: Error code returned by SDK
-  description: Error message
+  code: -1, // -1 parameter error, -2 LINE SDK error, -3 unknown error
+  sdkErrorCode: 'OPTIONAL_SDK_ERROR_CODE',
+  description: 'Error message'
 }
 ```
 
-## use in capacitors
+## LINE SDK Documentation
 
-### install
-```
-$ npm install cordova-line-login-plugin
-```
-
-### iOS configuration
-
-Overwrite AppDelegate and info.plist in capcitor or add value Please take the following actions as I have not found a way to do so.  
-Please note that you will have to deal with this every time you recreate the ios directory.  
-
-In file ios/App/App/AppDelegate.swift add or replace the following:
-```
-+ import LineSDK
-  [...]
-   func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
--   return CAPBridge.handleOpenUrl(url, options)
-+     if CAPBridge.handleOpenUrl(url, options) {
-+        return LoginManager.shared.application(app, open: url)
-+     } else {
-+         return false
-+     }
-   }
-```
-
-Add the following in the ios/App/App/info.plist file:  
-```
-+ <key>CFBundleURLTypes</key>
-+ <array>
-+     <dict>
-+         <key>CFBundleTypeRole</key>
-+         <string>Editor</string>
-+         <key>CFBundleURLSchemes</key>
-+         <array>
-+             <string>line3rdp.$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-+         </array>
-+     </dict>
-+ </array>
-+ <key>LSApplicationQueriesSchemes</key>
-+ <array>
-+     <string>lineauth2</string>
-+ </array>
-```
-
+- [LINE SDK for Android](https://developers.line.biz/en/docs/line-login-sdks/android-sdk/integrate-line-login/)
+- [LINE SDK for iOS Swift](https://developers.line.biz/en/docs/line-login-sdks/ios-sdk/swift/integrate-line-login/)

@@ -8,12 +8,11 @@ import com.linecorp.linesdk.LineProfile;
 import com.linecorp.linesdk.Scope;
 import com.linecorp.linesdk.api.LineApiClient;
 import com.linecorp.linesdk.api.LineApiClientBuilder;
-import com.linecorp.linesdk.auth.LineLoginApi;
 import com.linecorp.linesdk.auth.LineAuthenticationParams;
+import com.linecorp.linesdk.auth.LineLoginApi;
 import com.linecorp.linesdk.auth.LineLoginResult;
 
 import android.content.Intent;
-import android.util.Log;
 
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaPlugin;
@@ -30,20 +29,21 @@ public class LineLogin extends CordovaPlugin {
     private static final int SDK_ERROR = -2;
     private static final int UNKNOWN_ERROR = -3;
 
-    String channelId;
-    CallbackContext callbackContext;
+    private String channelId;
+    private CallbackContext loginCallbackContext;
     private static LineApiClient lineApiClient;
 
     @Override
     public boolean execute(String action, JSONArray data, CallbackContext callbackContext) throws JSONException {
 
-        this.callbackContext = callbackContext;
-
         if (action.equals("initialize")) {
             this.initialize(data, callbackContext);
             return true;
         } else if (action.equals("login")) {
-            this.login(callbackContext);
+            this.login(callbackContext, false);
+            return true;
+        } else if (action.equals("loginWeb")) {
+            this.login(callbackContext, true);
             return true;
         } else if (action.equals("logout")) {
             this.logout(callbackContext);
@@ -68,109 +68,183 @@ public class LineLogin extends CordovaPlugin {
             return;
         }
 
+        CallbackContext callbackContext = loginCallbackContext;
+        loginCallbackContext = null;
+        if (callbackContext == null) {
+            return;
+        }
+
         LineLoginResult result = LineLoginApi.getLoginResultFromIntent(data);
         if (result.getResponseCode() == LineApiResponseCode.SUCCESS) {
             JSONObject json = new JSONObject();
             try {
                 LineProfile profile = result.getLineProfile();
-                json.put("userID", profile.getUserId());
-                json.put("displayName", profile.getDisplayName());
-                if (profile.getPictureUrl() != null) {
+                if (profile != null) {
+                    json.put("userID", profile.getUserId());
+                    json.put("displayName", profile.getDisplayName());
+                }
+                if (profile != null && profile.getPictureUrl() != null) {
                     json.put("pictureURL", profile.getPictureUrl().toString());
                 }
 
                 LineIdToken lineIdToken = result.getLineIdToken();
-                json.put("email", lineIdToken.getEmail());
+                if (lineIdToken != null && lineIdToken.getEmail() != null) {
+                    json.put("email", lineIdToken.getEmail());
+                }
 
                 callbackContext.success(json);
             } catch (JSONException e) {
-                this.UnknownError(e.toString());
+                this.unknownError(callbackContext, e.toString());
             }
         } else if (result.getResponseCode() == LineApiResponseCode.CANCEL) {
-            this.SDKError(result.getResponseCode().toString(), "user cancel");
+            this.sdkError(callbackContext, result.getResponseCode().toString(), "user cancel");
         } else {
-            this.SDKError(result.getResponseCode().toString(), result.toString());
+            this.sdkError(callbackContext, result.getResponseCode().toString(), result.toString());
         }
     }
 
     private void initialize(JSONArray data, CallbackContext callbackContext) throws JSONException {
+        if (data.length() == 0 || data.isNull(0)) {
+            this.parameterError(callbackContext, "channel_id is required.");
+            return;
+        }
+
         JSONObject params = data.getJSONObject(0);
-        channelId = params.get("channel_id").toString();
+        channelId = params.optString("channel_id", "");
         if (channelId.length() == 0) {
-            this.parameterError("channel_id is required.");
+            this.parameterError(callbackContext, "channel_id is required.");
         } else {
             LineApiClientBuilder apiClientBuilder = new LineApiClientBuilder(this.cordova.getActivity().getApplicationContext(), channelId);
             lineApiClient = apiClientBuilder.build();
+            callbackContext.success();
         }
     }
 
-    private void login(CallbackContext callbackContext) {
+    private void login(CallbackContext callbackContext, boolean webOnly) {
         try {
-            Intent loginIntent = LineLoginApi.getLoginIntent(
-                    this.cordova.getActivity().getApplicationContext(),
-                    channelId,
-                    new LineAuthenticationParams.Builder()
-                            .scopes(Arrays.asList(Scope.PROFILE, Scope.OPENID_CONNECT, Scope.OC_EMAIL))
-                            .build()
-            );
+            if (!this.isInitialized()) {
+                this.parameterError(callbackContext, "initialize must be called before login.");
+                return;
+            }
+
+            LineAuthenticationParams authenticationParams = new LineAuthenticationParams.Builder()
+                    .scopes(Arrays.asList(Scope.PROFILE, Scope.OPENID_CONNECT, Scope.OC_EMAIL))
+                    .build();
+            Intent loginIntent = webOnly
+                    ? LineLoginApi.getLoginIntentWithoutLineAppAuth(
+                            this.cordova.getActivity().getApplicationContext(),
+                            channelId,
+                            authenticationParams
+                    )
+                    : LineLoginApi.getLoginIntent(
+                            this.cordova.getActivity().getApplicationContext(),
+                            channelId,
+                            authenticationParams
+                    );
+            loginCallbackContext = callbackContext;
             this.cordova.startActivityForResult((CordovaPlugin) this, loginIntent, REQUEST_CODE);
         } catch (Exception e) {
-            this.UnknownError(e.toString());
+            this.unknownError(callbackContext, e.toString());
         }
     }
 
     private void logout(CallbackContext callbackContext) {
-        try {
-            lineApiClient.logout();
-            callbackContext.success();
-        } catch (Exception e) {
-            this.UnknownError(e.toString());
-        }
+        this.runLineApiCall(callbackContext, new Runnable() {
+            @Override
+            public void run() {
+                LineLogin.this.lineApiClient.logout();
+                callbackContext.success();
+            }
+        });
     }
 
     private void getAccessToken(CallbackContext callbackContext) {
-        try {
-            JSONObject json = new JSONObject();
-            LineAccessToken lineAccessToken = lineApiClient.getCurrentAccessToken().getResponseData();
-            json.put("accessToken", lineAccessToken.getTokenString());
-            json.put("expireTime", lineAccessToken.getEstimatedExpirationTimeMillis());
-            callbackContext.success(json);
-        } catch (Exception e) {
-            this.UnknownError(e.toString());
-        }
+        this.runLineApiCall(callbackContext, new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    JSONObject json = new JSONObject();
+                    LineAccessToken lineAccessToken = lineApiClient.getCurrentAccessToken().getResponseData();
+                    if (lineAccessToken == null) {
+                        LineLogin.this.sdkError(callbackContext, "NO_ACCESS_TOKEN", "No current LINE access token.");
+                        return;
+                    }
+                    json.put("accessToken", lineAccessToken.getTokenString());
+                    json.put("expireTime", lineAccessToken.getEstimatedExpirationTimeMillis());
+                    callbackContext.success(json);
+                } catch (JSONException e) {
+                    LineLogin.this.unknownError(callbackContext, e.toString());
+                }
+            }
+        });
     }
 
     private void verifyAccessToken(CallbackContext callbackContext) {
-        LineApiResponse verifyResponse = lineApiClient.verifyToken();
-        if (verifyResponse.isSuccess()) {
-            callbackContext.success();
-        } else {
-            this.SDKError(verifyResponse.getResponseCode().toString(), verifyResponse.getErrorData().toString());
-        }
+        this.runLineApiCall(callbackContext, new Runnable() {
+            @Override
+            public void run() {
+                LineApiResponse verifyResponse = lineApiClient.verifyToken();
+                if (verifyResponse.isSuccess()) {
+                    callbackContext.success();
+                } else {
+                    LineLogin.this.sdkError(
+                            callbackContext,
+                            verifyResponse.getResponseCode().toString(),
+                            verifyResponse.getErrorData() == null ? "" : verifyResponse.getErrorData().toString()
+                    );
+                }
+            }
+        });
     }
 
     private void refreshAccessToken(CallbackContext callbackContext) {
-        try {
-            lineApiClient.refreshAccessToken();
-            LineAccessToken lineAccessToken = lineApiClient.getCurrentAccessToken().getResponseData();
-            callbackContext.success(lineAccessToken.getTokenString());
-        } catch (Exception e) {
-            this.UnknownError(e.toString());
-        }
+        this.runLineApiCall(callbackContext, new Runnable() {
+            @Override
+            public void run() {
+                LineAccessToken lineAccessToken = lineApiClient.refreshAccessToken().getResponseData();
+                if (lineAccessToken == null) {
+                    LineLogin.this.sdkError(callbackContext, "NO_ACCESS_TOKEN", "LINE access token could not be refreshed.");
+                    return;
+                }
+                callbackContext.success(lineAccessToken.getTokenString());
+            }
+        });
     }
 
-    private void parameterError(String description) {
+    private boolean isInitialized() {
+        return channelId != null && channelId.length() > 0 && lineApiClient != null;
+    }
+
+    private void runLineApiCall(final CallbackContext callbackContext, final Runnable runnable) {
+        if (!this.isInitialized()) {
+            this.parameterError(callbackContext, "initialize must be called before calling LINE APIs.");
+            return;
+        }
+
+        this.cordova.getThreadPool().execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    runnable.run();
+                } catch (Exception e) {
+                    LineLogin.this.unknownError(callbackContext, e.toString());
+                }
+            }
+        });
+    }
+
+    private void parameterError(CallbackContext callbackContext, String description) {
         try {
             JSONObject json = new JSONObject();
             json.put("code", PARAMETER_ERROR);
             json.put("description", description);
             callbackContext.error(json);
         } catch (JSONException e) {
-            this.UnknownError(e.toString());
+            this.unknownError(callbackContext, e.toString());
         }
     }
 
-    private void SDKError(String sdkErrorCode, String description) {
+    private void sdkError(CallbackContext callbackContext, String sdkErrorCode, String description) {
         try {
             JSONObject json = new JSONObject();
             json.put("code", SDK_ERROR);
@@ -178,11 +252,11 @@ public class LineLogin extends CordovaPlugin {
             json.put("description", description);
             callbackContext.error(json);
         } catch (JSONException e) {
-            this.UnknownError(e.toString());
+            this.unknownError(callbackContext, e.toString());
         }
     }
 
-    private void UnknownError(String description) {
+    private void unknownError(CallbackContext callbackContext, String description) {
         try {
             JSONObject json = new JSONObject();
             json.put("code", UNKNOWN_ERROR);

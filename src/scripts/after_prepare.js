@@ -2,29 +2,29 @@
 
 var fs = require("fs")
 var os = require("os")
-var execSync = require('child_process').execSync
-
-var stdio = {stdio:[0,1,2]};
 
 module.exports = function (context) {
 
   var rootPath = context.opts.projectRoot
   var platformPath = rootPath + "/platforms/android"
   var propertiesPath = platformPath + "/gradle.properties"
+  var requiredProperties = {
+    "android.useAndroidX": "true",
+    "android.enableJetifier": "true"
+  }
 
   if (!existsFile(propertiesPath)) {
-    execSync("touch " + propertiesPath, stdio);
+    fs.writeFileSync(propertiesPath, "")
   }
 
   var text = fs.readFileSync(propertiesPath, "utf-8")
-  if (text.match(/android\.enableD8\.desugaring/) == null) {
-    if (text.length == 0) {
-      text = "android.enableD8.desugaring=true"
-    } else {
-      text = text + os.EOL + "android.enableD8.desugaring=true"
+  Object.keys(requiredProperties).forEach(function (key) {
+    var pattern = new RegExp("^" + key.replace(/\./g, "\\.") + "\\s*=", "m")
+    if (!pattern.test(text)) {
+      text = text.length === 0 ? key + "=" + requiredProperties[key] : text + os.EOL + key + "=" + requiredProperties[key]
     }
-    fs.writeFileSync(propertiesPath, text)
-  }
+  })
+  fs.writeFileSync(propertiesPath, text)
 
   function existsFile(path) {
     try {
@@ -35,5 +35,4 @@ module.exports = function (context) {
     }
   }
 
-  
 }
