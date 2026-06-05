@@ -28,7 +28,7 @@ import LineSDK
         commandDelegate.send(result, callbackId:command.callbackId)
     }
     
-    func _login(_ command: CDVInvokedUrlCommand, onlyWebLogin: Bool) {
+    @MainActor func _login(_ command: CDVInvokedUrlCommand, onlyWebLogin: Bool) {
         guard LoginManager.shared.isSetupFinished else {
             self.parameterError(command: command, description: "initialize must be called before login")
             return
@@ -63,11 +63,11 @@ import LineSDK
         }
     }
     
-    @objc func loginWeb(_ command: CDVInvokedUrlCommand) {
+    @MainActor @objc func loginWeb(_ command: CDVInvokedUrlCommand) {
         self._login(command, onlyWebLogin: true)
     }
     
-    @objc func login(_ command: CDVInvokedUrlCommand) {
+    @MainActor @objc func login(_ command: CDVInvokedUrlCommand) {
         self._login(command, onlyWebLogin: false)
     }
     
