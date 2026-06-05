@@ -7,6 +7,9 @@
   <js-module src="www/lineLogin.js">
     <clobbers target="lineLogin" />
   </js-module>
+  <hook type="before_plugin_add" src="src/scripts/ios_after_prepare.js"/>
+  <hook type="before_plugin_install" src="src/scripts/ios_after_prepare.js"/>
+  <hook type="after_prepare" src="src/scripts/ios_after_prepare.js"/>
 
   <engines>
     <engine name="cordova" version=">=10.0.0"/>
@@ -44,7 +47,6 @@
     <source-file src="src/ios/AppDelegate+LineLogin.h" />
     <source-file src="src/ios/AppDelegate+LineLogin.m" />
     <source-file src="src/ios/LineLogin.swift" />
-    <hook type="after_prepare" src="src/scripts/ios_after_prepare.js"/>
 
     <podspec>
       <config>

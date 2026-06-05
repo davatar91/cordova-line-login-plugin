@@ -14,7 +14,9 @@ module.exports = function (context) {
     return;
   }
 
-  const projectDir = fs.readdirSync(iosPath).find((entry) => entry.endsWith('.xcodeproj'));
+  const projectDir = fs.readdirSync(iosPath).find((entry) => (
+    entry.endsWith('.xcodeproj') && entry !== 'CordovaLib.xcodeproj'
+  ));
   if (!projectDir) {
     return;
   }
@@ -43,7 +45,12 @@ module.exports = function (context) {
 
     const buildConfig = buildConfigs[configName];
     xcodeProject.updateBuildProperty('SWIFT_VERSION', '5.0', buildConfig.name);
-    xcodeProject.updateBuildProperty('ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES', 'YES', buildConfig.name);
+    xcodeProject.removeBuildProperty('ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES', buildConfig.name);
+    xcodeProject.updateBuildProperty(
+      'LD_RUNPATH_SEARCH_PATHS',
+      '"$(inherited) @executable_path/Frameworks"',
+      buildConfig.name
+    );
 
     if (bridgingHeaderPath) {
       xcodeProject.updateBuildProperty('SWIFT_OBJC_BRIDGING_HEADER', bridgingHeaderPath, buildConfig.name);
